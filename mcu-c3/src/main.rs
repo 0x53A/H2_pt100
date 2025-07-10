@@ -123,7 +123,7 @@ fn volt_to_temp(adc_voltage: f32) -> f32 {
     let V_ADC_MAX = 0.933379447;
     let i_ADC_MAX = 4095;
 
-    let R_SERIES = 998.0; // 1kΩ Vorwiderstand
+    let R_SERIES = 998.8; // 1kΩ Vorwiderstand
     let VCC = 3.211; // Versorgungsspannung
 
     let r_pt100 = (adc_voltage * R_SERIES) / (VCC - adc_voltage);
