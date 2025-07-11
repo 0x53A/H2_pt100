@@ -45,7 +45,6 @@ fn main() -> ! {
     // esp_alloc::heap_allocator!(size: 32 * 1024);
 
     match _main() {
-        Ok(_) => loop {},
         Err(_e) => loop {},
     }
 }
@@ -105,10 +104,10 @@ fn _main() -> Result<!> {
 }
 
 fn adc_to_volt(adc_value: u16) -> f32 {
-    const offset: u16 = 1715;
-    const volt_per_unit: f32 = 0.000227931488801054;
+    const OFFSET: u16 = 1715;
+    const VOLT_PER_UNIT: f32 = 0.000227931488801054;
 
-    (adc_value.saturating_sub(offset) as f32) * volt_per_unit
+    (adc_value.saturating_sub(OFFSET) as f32) * VOLT_PER_UNIT
 }
 
 fn volt_to_temp(adc_voltage: f32) -> f32 {
@@ -130,7 +129,7 @@ fn volt_to_temp(adc_voltage: f32) -> f32 {
 
 /// alternatively, if you measure two temperature values with an external thermometer,
 /// you can use a simple two-point mapping.
-fn map_temp(adc_value: u16) -> f32 {
+fn _map_temp(adc_value: u16) -> f32 {
     // at 100C, the ADC was outputting 3445
     let out_max = 100.0;
     let in_max = 3445.0;
@@ -144,7 +143,7 @@ fn map_temp(adc_value: u16) -> f32 {
     (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 }
 
-fn display_sensor_values(display: &mut MyDisplay, adc: u16, u: f32, temp: f32) -> Result<()> {
+fn display_sensor_values(display: &mut MyDisplay, _adc: u16, u: f32, temp: f32) -> Result<()> {
     let bg = BinaryColor::Off;
     let fg = BinaryColor::On;
 

@@ -29,3 +29,8 @@ anyhow = { version = "1.0.98", default-features = false }
 heapless = "0.8.0"
 esp-alloc = "0.8.0"
 nb = "1.1.0"
+
+[profile.release]
+opt-level = 's'     # Optimize for size
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Use single codegen unit for better optimization
