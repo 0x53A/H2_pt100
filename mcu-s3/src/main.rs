@@ -4,7 +4,6 @@
 
 use core::fmt::Write;
 
-use embedded_can::{self, *};
 use embedded_graphics::{
     mono_font::MonoTextStyle,
     pixelcolor::BinaryColor,
@@ -14,14 +13,13 @@ use embedded_graphics::{
 };
 use esp_backtrace as _;
 use esp_hal::{
-    analog::adc::{AdcCalBasic, AdcCalCurve, Attenuation},
+    analog::adc::Attenuation,
     delay::Delay,
     gpio::{Level, Output, OutputConfig},
     i2c::{self, master::I2c},
     main,
     peripherals::{GPIO17, GPIO18, GPIO21, I2C0},
     time::Rate,
-    twai::{self, filter::SingleStandardFilter, *},
 };
 
 use embedded_graphics::mono_font::ascii::FONT_10X20;
@@ -69,8 +67,7 @@ fn _main() -> Result<!> {
 
     let mut gpio_out = Output::new(gpio_out_pin, Level::Low, OutputConfig::default());
     let mut adc_config = esp_hal::analog::adc::AdcConfig::default();
-    let mut adc_pin =
-        adc_config.enable_pin(adc_in_pin, Attenuation::_0dB);
+    let mut adc_pin = adc_config.enable_pin(adc_in_pin, Attenuation::_0dB);
     let mut adc = esp_hal::analog::adc::Adc::new(peripherals.ADC1, adc_config);
 
     let mut str: String<1000> = heapless::String::new();
@@ -87,24 +84,22 @@ fn _main() -> Result<!> {
             values.push(value).unwrap();
         }
 
-        // gpio_out.set_low();
+        gpio_out.set_low();
 
         values.sort();
         let median_value = values[values.len() / 2];
 
-        let mut str: String<1000> = heapless::String::new();
         let v = adc_to_volt(median_value);
         let temp = volt_to_temp(v);
 
-        // let mut str: String<1000> = heapless::String::new();
-        // write!(&mut str, "ADC: {median_value}")?;
-        // set_status(&mut display, &str)?;
+        // write to oled display
+        display_sensor_values(&mut display, median_value, v, temp)?;
 
-        // delay.delay_millis(200);
+        // output to USB serial
+        let mut str: String<1000> = heapless::String::new();
+        write!(&mut str, "{temp:0.2}")?;
+        esp_println::println!("{str}");
 
-        write_sensor_values(&mut display, median_value, v, temp)?;
-
-        // delay.delay_millis(200);
         delay.delay_millis(20);
     }
 }
@@ -117,17 +112,14 @@ fn adc_to_volt(adc_value: u16) -> f32 {
 }
 
 fn volt_to_temp(adc_voltage: f32) -> f32 {
-    let V_ADC_MAX = 0.933379447;
-    let i_ADC_MAX = 4095;
+    const R_SERIES: f32 = 998.0; // 1kΩ Vorwiderstand
+    const VCC: f32 = 3.211; // output voltage of the GPIO pin
 
-    let R_SERIES = 998.0; // 1kΩ Vorwiderstand
-    let VCC = 3.211; // Versorgungsspannung
-
+    // the calculated resistance of the pt100 based on the measured voltage
     let r_pt100 = (adc_voltage * R_SERIES) / (VCC - adc_voltage);
 
-    // PT100 Widerstand zu Temperatur (vereinfachte lineare Näherung)
     // PT100: R(T) = R0 * (1 + α * T)
-    // R0 = 100Ω bei 0°C, α ≈ 0.00385 /°C
+    // R0 = 100Ω bei 0°C, α ≈ 0.00385 1/°C
     const R0: f32 = 100.0;
     const ALPHA: f32 = 0.00385;
 
@@ -136,48 +128,23 @@ fn volt_to_temp(adc_voltage: f32) -> f32 {
     temperature
 }
 
-fn map_temp(input: u16) -> f32 {
+/// alternatively, if you measure two temperature values with an external thermometer,
+/// you can use a simple two-point mapping.
+fn map_temp(adc_value: u16) -> f32 {
+    // at 100C, the ADC was outputting 3445
+    let out_max = 100.0;
     let in_max = 3445.0;
+
+    // at 32C, the ADC was outputting 3160
+    let out_min = 32.0;
     let in_min = 3160.0;
 
-    let out_max = 100.0;
-    let out_min = 32.0;
-
-    let input: f32 = input as f32;
-
-    // (input - _32c) as f32 * (100.0 - 32.0) / (_100c - _32c) as f32 + 32.0
+    let input: f32 = adc_value as f32;
 
     (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 }
 
-// Funktion zur Umwandlung des ADC-Werts in Grad Celsius
-fn adc_to_celsius(adc_value: u16) -> f32 {
-    const ADC_MAX: f32 = ((1 << 13) - 1) as f32; // 8191
-    const ADC_VOLTAGE_MAX: f32 = 0.845;
-    const VCC: f32 = 3.211;
-    const R_SERIES: f32 = 998.0; // 1kΩ Vorwiderstand
-
-    // ADC Wert in Spannung umwandeln
-    let adc_voltage = (adc_value as f32 / ADC_MAX) * ADC_VOLTAGE_MAX;
-
-    // Spannungsteiler: V_adc = VCC * R_pt100 / (R_series + R_pt100)
-    // Umformen nach R_pt100: R_pt100 = (adc_voltage * R_series) / (VCC - adc_voltage)
-    let r_pt100 = (adc_voltage * R_SERIES) / (VCC - adc_voltage);
-
-    // let temp = (adc_value - 0.09090909090909*ADC_MAX) * (200 - 0) / (0.14954*ADC_MAX - 0.09090909090909*ADC_MAX) + 0;
-
-    // PT100 Widerstand zu Temperatur (vereinfachte lineare Näherung)
-    // PT100: R(T) = R0 * (1 + α * T)
-    // R0 = 100Ω bei 0°C, α ≈ 0.00385 /°C
-    const R0: f32 = 100.0;
-    const ALPHA: f32 = 0.00385;
-
-    let temperature = (r_pt100 - R0) / (R0 * ALPHA);
-
-    temperature
-}
-
-fn write_sensor_values(display: &mut MyDisplay, adc: u16, u: f32, temp: f32) -> Result<()> {
+fn display_sensor_values(display: &mut MyDisplay, adc: u16, u: f32, temp: f32) -> Result<()> {
     let bg = BinaryColor::Off;
     let fg = BinaryColor::On;
 
@@ -194,11 +161,6 @@ fn write_sensor_values(display: &mut MyDisplay, adc: u16, u: f32, temp: f32) -> 
         .draw(display)
         .map_err(|e| anyhow::anyhow!("Display error: {:?}", e))?;
 
-    // let mut line1: String<32> = String::new();
-    // write!(&mut line1, "ADC: {}", adc).unwrap();
-
-    // let mut line2: String<32> = String::new();
-    // write!(&mut line2, "U: {:.2}V | T: {:.2}C", u, temp).unwrap();
     let mut line1: String<32> = String::new();
     write!(&mut line1, "U: {u:.2} V").unwrap();
 

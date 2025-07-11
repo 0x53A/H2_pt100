@@ -829,7 +829,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcu"
+name = "mcu-c3"
 version = "0.1.0"
 dependencies = [
  "anyhow",

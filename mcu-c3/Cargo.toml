@@ -1,12 +1,12 @@
 [package]
-name = "mcu"
+name = "mcu-c3"
 version = "0.1.0"
 edition = "2024"
 
 # without 'test = false', vscode shows an error
 # https://github.com/rust-lang/vscode-rust/issues/729#issuecomment-1135449424
 [[bin]]
-name = "mcu"
+name = "mcu-c3"
 test = false
 bench = false
 
