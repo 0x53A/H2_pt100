@@ -29,3 +29,14 @@ The calibration data is in ``adc_to_volt`` in [``main.rs``](./src/main.rs).
 ## What does it do?
 
 It measures the temperature of the PT100 through a simple resistor voltage divider, then shows it on the connected display, and outputs it as a string (12.34) through the USB serial connection.
+
+## Serial Output
+
+You need to pull GPIO15 to ground to disable printing version information on boot: https://community.platformio.org/t/esp32-prevent-from-sending-serial-output-at-startup/18756/2
+
+## Pins
+
+
+![alt text](_content/pinout2.png)
+
+![alt text](_content/pinout.png)

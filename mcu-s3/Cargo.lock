@@ -869,7 +869,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "critical-section",
- "embedded-can",
  "embedded-graphics",
  "embedded-hal 1.0.0",
  "esp-alloc",

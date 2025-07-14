@@ -21,7 +21,6 @@ esp-backtrace = { version = "0.16.0", features = [
 esp-bootloader-esp-idf = "0.1.0"
 esp-println = { version = "0.14.0", features = ["esp32s3"] }
 critical-section = "1.2.0"
-embedded-can = "0.4.1"
 embedded-graphics = "0.8.1"
 ssd1306 = "0.10.0"
 embedded-hal = "1.0.0"
@@ -34,3 +33,5 @@ nb = "1.1.0"
 opt-level = 's'     # Optimize for size
 lto = true          # Enable Link Time Optimization
 codegen-units = 1   # Use single codegen unit for better optimization
+#strip = true        # strip symbols
+#panic = "abort"
