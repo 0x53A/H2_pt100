@@ -4,7 +4,27 @@ Based on example https://github.com/embassy-rs/embassy/tree/main/examples/stm32g
 
 ## Pin Configuration
 
+### ADC
+
 On the Nucleo Board, CN3:[7,8] (PA5/PA6) are used for I2C, CN3:[5,10] (PA2/PA3) are used for UART. This leaves PA0, PA1, PA4, PA7 as analog-capable pins.
+
+### OpAmp
+
+To use the OpAmp in buffer mode, we need to connect OPAMPx_VINP to the signal we want to measure.
+
+Potential Pins:
+
+| Pin | Func |
+| -- | -- |
+| PA1 | OPAMP1_VINP, OPAMP3_VINP |
+| ~PA3~ | _(PA3 is used for UART)_ |
+| PA7 | OPAMP1_VINP, OPAMP2_VINP |
+| PB0 | OPAMP2_VINP, OPAMP3_VINP |
+| PB13 | OPAMP3_VINP |
+| PB14 | OPAMP2_VINP |
+| PD14 | OPAMP2_VINP |
+
+
 
 ## Setup
 

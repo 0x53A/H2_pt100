@@ -5,7 +5,10 @@ use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::adc::vals::{Rovsm, Trovs};
 use embassy_stm32::adc::{Adc, Resolution, SampleTime};
+use embassy_stm32::bind_interrupts;
 use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy_stm32::opamp::{OpAmp, OpAmpSpeed};
+use embassy_stm32::rng::Rng;
 use embassy_stm32::usart::UartTx;
 use embassy_time::{Delay, Duration, Ticker};
 use embedded_hal::delay::DelayNs as _;
@@ -14,82 +17,13 @@ use heapless::Vec;
 use serde::Serialize;
 use {defmt_rtt as _, panic_probe as _};
 
-#[derive(Serialize)]
-pub struct SamplingConfig {
-    pub resolution_bits: u8,
-    pub sample_time_cycles: u16,
-    pub oversampling: u16,
-    pub n_measurements: u16,
-}
 
-#[derive(Serialize)]
-pub struct CalibrationConfig {
-    pub cal_1_high_resistor_ohms: f32,
-    pub cal_1_low_resistor_ohms: f32,
-    pub cal_2_high_resistor_ohms: f32,
-    pub cal_2_low_resistor_ohms: f32,
-}
+use common::*;
 
-#[derive(Serialize)]
-pub struct Config {
-    pub sampling: SamplingConfig,
-    pub calibration: CalibrationConfig,
+bind_interrupts!(struct Irqs {
+    RNG => embassy_stm32::rng::InterruptHandler<embassy_stm32::peripherals::RNG>;
+});
 
-    pub pt100_1_series_resistor_ohms: f32,
-    pub pt100_2_series_resistor_ohms: f32,
-    // pub pt100_3_series_resistor_ohms: f32,
-}
-
-#[derive(Serialize)]
-pub struct RawMeasurements {
-    pub cal1: MedianStats,
-    pub cal2: MedianStats,
-
-    pub pt100_1: MedianStats,
-    pub pt100_2: MedianStats,
-    // pub pt100_3: MedianStats,
-}
-
-#[derive(Serialize)]
-pub struct MedianStats {
-    /// 20th percentile value
-    pub p20: u16,
-    /// Median (50th percentile)
-    pub median: u16,
-    /// 80th percentile value
-    pub p80: u16,
-}
-
-#[derive(Serialize)]
-pub struct Temperatures {
-    pub adc_cal: AdcCalibration,
-    pub pt100_1: CalculatedValues,
-    pub pt100_2: CalculatedValues,
-    // pub pt100_3: f32,
-}
-
-#[derive(Serialize)]
-struct CalculatedValues {
-    r_pt: f32,
-    temperature: f32,
-}
-
-/// ADC calibration data calculated from two reference voltage dividers
-#[derive(Serialize)]
-struct AdcCalibration {
-    /// The offset of the ADC, that is, the value that would be measured at 0V
-    offset: u16,
-    /// The value of VCC, with the offset already compensated for.
-    /// That is, if you connected VCC to the ADC, you would measure 'offset + vcc'.
-    vcc: u16,
-}
-
-#[derive(Serialize)]
-pub struct UartOutput {
-    pub config: Config,
-    pub raw: RawMeasurements,
-    pub calculated: Temperatures,
-}
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) -> ! {
@@ -120,6 +54,9 @@ async fn main(_spawner: Spawner) -> ! {
     // Init peripherals
     // --------------------------------------------------
 
+    let mut rng = Rng::new(p.RNG, Irqs);
+    let id = rng.next_u32();
+
     // UART
     let mut usart = UartTx::new(
         p.USART2,
@@ -131,6 +68,10 @@ async fn main(_spawner: Spawner) -> ! {
 
     // status LED
     let mut led_status = Output::new(p.PB8, Level::High, Speed::Low);
+
+    // let opamp = OpAmp::new(p.OPAMP1, OpAmpSpeed::Normal);
+    // opamp.buffer_int(p.);
+    // opamp.pga_int(in_pin, out_pin, gain)
 
     // GPIO out
     // Note: currently the GPIO is always on,
@@ -176,7 +117,7 @@ async fn main(_spawner: Spawner) -> ! {
 
     info!("Starting measurement loop");
 
-    let mut ticker = Ticker::every(Duration::from_millis(100));
+    // let mut ticker = Ticker::every(Duration::from_millis(100));
 
     loop {
         const N_MEASUREMENTS: usize = 20;
@@ -277,6 +218,7 @@ async fn main(_spawner: Spawner) -> ! {
 
         // Output via UART as JSON
         let output = UartOutput {
+            boot_id: id,
             config: Config {
                 sampling: SamplingConfig {
                     resolution_bits: 12,

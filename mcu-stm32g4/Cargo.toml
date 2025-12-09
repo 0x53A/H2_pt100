@@ -11,6 +11,7 @@ test = false
 bench = false
 
 [dependencies]
+common = { path = "../common" }
 embassy-stm32 = { version = "0.3.0", features = [ "defmt", "time-driver-any", "stm32g431kb", "memory-x", "unstable-pac", "exti"]  }
 embassy-sync = { version = "0.7.1", features = ["defmt"] }
 embassy-executor = { version = "0.8.0", features = ["arch-cortex-m", "executor-thread", "defmt"] }
