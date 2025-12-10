@@ -1,7 +1,15 @@
-Firmware for Heltec Wifi V3 board with esp32-s3 in folder [./mcu-s3](./mcu-s3).
+This project contains the firmware for the STM32 Nucelo board that's used to measure electrolyte in- and outflow temperatures using PT100 probes at the big ely test station.
 
-The board that's currently in the Lab is the Heltec board with the ESP32-S3!
+The firmware is in ./mcu-stm32g4.
 
-Firmware for ESP32-C3-Super-Mini board in folder [./mcu-c3](./mcu-c3) (WIP).
+In ./app, there's a small TUI that reads received data from UART.
 
-To install rust, run [rustup-init](https://rustup.rs/).
+In ./analysis there's the worksheet that was used for 2-point calibration.
+
+The ROS Node which receives the data ignores the temperatures calculated internally by the firmware (which are inaccurate) and recalibrates based on the worksheet:
+
+```
+=== Calibration Coefficients ===
+PT100 #1: T = 0.008517 * ADC + (-270.186)
+PT100 #2: T = 0.008559 * ADC + (-269.970)
+```
