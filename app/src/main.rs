@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Local, Utc};
+use chrono::Utc;
 use clap::Parser;
 use common::UartOutput;
 use crossterm::{
@@ -64,6 +64,7 @@ struct App {
     last_received: Option<Instant>,
     available_ports: Vec<String>,
     list_state: ListState,
+    error_counter: u32,
     status_message: String,
     last_flush: Instant,
 }
@@ -90,6 +91,7 @@ impl App {
             last_received: None,
             available_ports: Vec::new(),
             list_state: ListState::default(),
+            error_counter: 0,
             status_message: String::new(),
             last_flush: Instant::now(),
         };
@@ -181,7 +183,7 @@ impl App {
     }
 
     fn open_log_file(&mut self) -> Result<()> {
-        let date = Utc::now().format("%Y-%m-%d");
+        let date = Utc::now().format("%Y-%m-%d_%H-%M-%S");
         let filename = format!("{}-temperatures.tsv", date);
         let path = self.log_dir.join(&filename);
         
@@ -209,14 +211,10 @@ impl App {
             writeln!(
                 file,
                 "timestamp\tboot_id\t\
-                sampling_resolution_bits\tsampling_sample_time_cycles\tsampling_oversampling\tsampling_n_measurements\t\
-                cal_1_high_resistor_ohms\tcal_1_low_resistor_ohms\tcal_2_high_resistor_ohms\tcal_2_low_resistor_ohms\t\
+                sampling_resolution_bits\tsampling_sample_time_cycles\tsampling_oversampling\tsampling_n_measurements\tsampling_amplification\t\
                 pt100_1_series_resistor_ohms\tpt100_2_series_resistor_ohms\t\
-                raw_cal1_p20\traw_cal1_median\traw_cal1_p80\t\
-                raw_cal2_p20\traw_cal2_median\traw_cal2_p80\t\
                 raw_pt100_1_p20\traw_pt100_1_median\traw_pt100_1_p80\t\
                 raw_pt100_2_p20\traw_pt100_2_median\traw_pt100_2_p80\t\
-                adc_cal_offset\tadc_cal_vcc\t\
                 pt100_1_r_pt\tpt100_1_temperature\t\
                 pt100_2_r_pt\tpt100_2_temperature"
             )?;
@@ -230,14 +228,10 @@ impl App {
             writeln!(
                 file,
                 "{}\t{}\t\
-                {}\t{}\t{}\t{}\t\
-                {}\t{}\t{}\t{}\t\
+                {}\t{}\t{}\t{}\t{}\t\
                 {}\t{}\t\
                 {}\t{}\t{}\t\
                 {}\t{}\t{}\t\
-                {}\t{}\t{}\t\
-                {}\t{}\t{}\t\
-                {}\t{}\t\
                 {}\t{}\t\
                 {}\t{}",
                 timestamp,
@@ -246,26 +240,15 @@ impl App {
                 output.config.sampling.sample_time_cycles,
                 output.config.sampling.oversampling,
                 output.config.sampling.n_measurements,
-                output.config.calibration.cal_1_high_resistor_ohms,
-                output.config.calibration.cal_1_low_resistor_ohms,
-                output.config.calibration.cal_2_high_resistor_ohms,
-                output.config.calibration.cal_2_low_resistor_ohms,
+                output.config.sampling.amplification,
                 output.config.pt100_1_series_resistor_ohms,
                 output.config.pt100_2_series_resistor_ohms,
-                output.raw.cal1.p20,
-                output.raw.cal1.median,
-                output.raw.cal1.p80,
-                output.raw.cal2.p20,
-                output.raw.cal2.median,
-                output.raw.cal2.p80,
                 output.raw.pt100_1.p20,
                 output.raw.pt100_1.median,
                 output.raw.pt100_1.p80,
                 output.raw.pt100_2.p20,
                 output.raw.pt100_2.median,
                 output.raw.pt100_2.p80,
-                output.calculated.adc_cal.offset,
-                output.calculated.adc_cal.vcc,
                 output.calculated.pt100_1.r_pt,
                 output.calculated.pt100_1.temperature,
                 output.calculated.pt100_2.r_pt,
@@ -323,7 +306,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                     .open()
                 {
                     Ok(port) => {
-                        serial_reader = Some(BufReader::new(port));
+                        serial_reader = Some(BufReader::with_capacity(20_000, port));
                         app.state = AppState::Connected;
                         app.status_message = format!("Connected to {} @ {}", app.port.as_ref().unwrap(), baud);
                         
@@ -359,13 +342,15 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                             match serde_json::from_str::<UartOutput>(line) {
                                 Ok(output) => {
                                     if let Err(e) = app.write_tsv_row(&output) {
-                                        app.status_message = format!("Write error: {}", e);
+                                        app.error_counter += 1;
+                                        app.status_message = format!("[{}] Write error: {}", app.error_counter, e);
                                     }
                                     app.last_output = Some(output);
                                     app.last_received = Some(Instant::now());
                                 }
                                 Err(e) => {
-                                    app.status_message = format!("Parse error: {}", e);
+                                    app.error_counter += 1;
+                                    app.status_message = format!("[{}] Parse error: {} ({})", app.error_counter, e, line[..20].to_string());
                                 }
                             }
                         }
@@ -375,7 +360,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                     }
                     Err(e) => {
                         app.state = AppState::Disconnected;
-                        app.status_message = format!("Read error: {}", e);
+                        app.error_counter += 1;
+                        app.status_message = format!("[{}] Read error: {}", app.error_counter, e);
                         serial_reader = None;
                         app.flush();
                     }
@@ -515,9 +501,10 @@ fn render_temperature_display(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5), // Temperatures
-            Constraint::Length(3), // Time since last
-            Constraint::Min(3),    // Status message
+            Constraint::Length(5),  // Temperatures
+            Constraint::Length(3),  // Time since last
+            Constraint::Length(6),  // Raw data
+            Constraint::Min(3),     // Status message
         ])
         .split(area);
 
@@ -581,10 +568,56 @@ fn render_temperature_display(f: &mut Frame, app: &App, area: Rect) {
         .block(Block::default().borders(Borders::ALL).title("Last Received"));
     f.render_widget(time_widget, chunks[1]);
 
+    // Raw data display
+    let raw_text = if let Some(ref output) = app.last_output {
+        vec![
+            Line::from(vec![
+                Span::styled("Raw PT100 #1: ", Style::default().fg(Color::Cyan)),
+                Span::raw(format!(
+                    "p20={}, median={}, p80={}",
+                    output.raw.pt100_1.p20, output.raw.pt100_1.median, output.raw.pt100_1.p80
+                )),
+            ]),
+            Line::from(vec![
+                Span::styled("Raw PT100 #2: ", Style::default().fg(Color::Cyan)),
+                Span::raw(format!(
+                    "p20={}, median={}, p80={}",
+                    output.raw.pt100_2.p20, output.raw.pt100_2.median, output.raw.pt100_2.p80
+                )),
+            ]),
+            Line::from(vec![
+                Span::styled("Sampling: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!(
+                    "{}bit, {}cyc, {}x oversample, {}meas, {}x amp",
+                    output.config.sampling.resolution_bits,
+                    output.config.sampling.sample_time_cycles,
+                    output.config.sampling.oversampling,
+                    output.config.sampling.n_measurements,
+                    output.config.sampling.amplification
+                )),
+            ]),
+            Line::from(vec![
+                Span::styled("Series R: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(format!(
+                    "PT100#1={}Ω, PT100#2={}Ω",
+                    output.config.pt100_1_series_resistor_ohms,
+                    output.config.pt100_2_series_resistor_ohms
+                )),
+            ]),
+        ]
+    } else {
+        vec![Line::from("No data yet")]
+    };
+
+    let raw_widget = Paragraph::new(raw_text)
+        .style(Style::default().fg(Color::White))
+        .block(Block::default().borders(Borders::ALL).title("Raw Data"));
+    f.render_widget(raw_widget, chunks[2]);
+
     // Status message
     let status = Paragraph::new(app.status_message.as_str())
         .style(Style::default().fg(Color::DarkGray))
         .block(Block::default().borders(Borders::ALL).title("Log"));
-    f.render_widget(status, chunks[2]);
+    f.render_widget(status, chunks[3]);
 }
 

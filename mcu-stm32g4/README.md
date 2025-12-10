@@ -20,9 +20,14 @@ Potential Pins:
 | ~PA3~ | _(PA3 is used for UART)_ |
 | PA7 | OPAMP1_VINP, OPAMP2_VINP |
 | PB0 | OPAMP2_VINP, OPAMP3_VINP |
-| PB13 | OPAMP3_VINP |
-| PB14 | OPAMP2_VINP |
-| PD14 | OPAMP2_VINP |
+| ~PB13~ | OPAMP3_VINP |
+| ~PB14~ | OPAMP2_VINP |
+| ~PD14~ | OPAMP2_VINP |
+
+### Usage
+
+Currently, PB7 is used as GPIO to enable/disable voltage over the pt100s.
+
 
 
 
