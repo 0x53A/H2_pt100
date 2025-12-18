@@ -26,9 +26,11 @@ Potential Pins:
 
 ### Usage
 
-Currently, PB7 is used as GPIO to enable/disable voltage over the pt100s.
+There is an approximately 3.2 kΩ series resistor between V_3.3 and the PT100. The PT100 are connected via PA7 and PB0 to OpAmp#2, which amplifies the signal by x16 and feeds it into ADC#2.
 
+Data is output through the ST-Link via UART at PA2.
 
+The firmware calculates temperature based on the series resistor values, but that is extremely inaccurate and should be ignored. Instead, the receiver should calculate the temperature based on the raw ADC values and a two-point calculation, which needs to be done for each board seperately.
 
 
 ## Setup
